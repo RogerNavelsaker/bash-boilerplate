@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Bash Script Template
+# Bash Script Template (main.sh)
 # Synthesized from:
 # - https://github.com/ralish/bash-script-template
 # - https://github.com/kvz/bash3boilerplate

@@ -14,7 +14,7 @@ A high-quality, production-ready Bash script boilerplate synthesized from indust
 
 ## Usage
 
-1. Copy `template.sh` to your project.
+1. Copy `main.sh` to your project.
 2. Rename it (e.g., `my-script.sh`).
 3. Add your logic in the `main()` function.
 4. Define your parameters in `parse_params()`.
