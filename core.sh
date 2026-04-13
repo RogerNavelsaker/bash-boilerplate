@@ -26,6 +26,13 @@ is_sourced() { [[ "${BASH_SOURCE[0]}" != "${0}" ]]; }
 is_tty() { [[ -t 1 ]]; }
 is_root() { [[ "$(id -u)" -eq 0 ]]; }
 
+sudo_reexec() {
+    if ! is_root; then
+        log INFO "Re-executing with sudo..."
+        exec sudo "$0" "$@"
+    fi
+}
+
 # 5. Cleanup & Traps
 cleanup() {
     local -r exit_code=$?
@@ -98,8 +105,10 @@ is_online() { for h in "8.8.8.8" "1.1.1.1" "google.com"; do ping -c 1 -W 1 "$h" 
 is_mac() { [[ "$(uname -s)" == "Darwin" ]]; }
 is_linux() { [[ "$(uname -s)" == "Linux" ]]; }
 is_container() { [[ -f /.dockerenv ]] || grep -qE "docker|lxc|containerd" /proc/1/cgroup 2>/dev/null || return 1; }
-is_git_repo() { is_cmd git && git rev-parse --is-inside-work-tree >/dev/null 2>&1; }
-version_gt() { test "$(printf '%s\n' "$@" | sort -V | head -n 1)" != "$1"; }
+get_arch() { [[ "$(uname -s)" == "Darwin" ]] && readonly __arch="arm64" || readonly __arch="$(uname -m)"; }
+cpu_count() { nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 1; }
+version_gt() {
+ test "$(printf '%s\n' "$@" | sort -V | head -n 1)" != "$1"; }
 check_bash_version() {
     local -r min_version="${1:-4}"
     if [[ "${BASH_VERSINFO[0]}" -lt "${min_version}" ]]; then
@@ -121,6 +130,13 @@ trim() { local v="$*"; v="${v#"${v%%[![:space:]]*}"}"; v="${v%"${v##*[![:space:]
 
 join_by() { local d=${1-} f=${2-}; if shift 2; then printf %s "$f" "${@/#/$d}"; fi; }
 slugify() { echo "${1}" | tr '[:upper:]' '[:lower:]' | tr -sc '[:alnum:]' '-' | tr -s '-' | sed 's/^-//;s/-$//'; }
+box() {
+    local msg="$*"
+    local len=${#msg}
+    hr "-" $((len + 4))
+    echo "| ${msg} |"
+    hr "-" $((len + 4))
+}
 indent() { local i="${1:-4}"; local s; printf -v s "%${i}s" ""; sed "s/^/${s}/"; }
 hr() { local c="${1:--}" w="${2:-80}" l; printf -v l "%${w}s" ""; echo "${l// /$c}"; }
 run() { if [[ "${DRY_RUN}" -eq 1 ]]; then log INFO "[DRY-RUN] $*"; else "$@"; fi; }
@@ -144,6 +160,11 @@ pause() { read -p "${1:-Press [Enter] to continue...}"; }
 load_env() {
     local f="${1:-.env}"; [[ -f "${f}" ]] || return 1
     while IFS='=' read -r k v || [[ -n "${k}" ]]; do [[ "${k}" =~ ^#.*$ || -z "${k}" ]] && continue; k=$(echo "${k}" | tr -d '[:space:]'); v=$(echo "${v}" | tr -d '[:space:]' | sed "s/^'//;s/'$//;s/^\"//;s/\"$//"); export "${k}=${v}"; done < "${f}"
+}
+ensure_line() {
+    local line="$1" file="$2"
+    [[ -f "${file}" ]] || touch "${file}"
+    grep -qF -- "${line}" "${file}" || echo "${line}" >> "${file}"
 }
 wait_for_url() { local u="${1}" t="${2:-30}" c=0; until quiet curl -s --head --request GET "${u}"; do sleep 1; ((c++)); [[ "${c}" -ge "${t}" ]] && return 1; done; return 0; }
 quiet() { "$@" >/dev/null 2>&1; }
