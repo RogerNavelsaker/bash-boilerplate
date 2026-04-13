@@ -25,6 +25,7 @@ readonly __bin="$(basename "$0")"
 # 3. Environment Variables & Defaults
 # LOG_LEVEL: 0 (EMERG) to 7 (DEBUG). Default: 6 (INFO)
 LOG_LEVEL="${LOG_LEVEL:-6}"
+LOG_FILE="${LOG_FILE:-}"
 NO_COLOR="${NO_COLOR:-}"
 DRY_RUN="${DRY_RUN:-0}"
 __temp_files=()
@@ -104,18 +105,27 @@ log() {
     local msg="$*"
     local timestamp
     timestamp=$(date +'%Y-%m-%dT%H:%M:%S%z')
+    local log_msg
 
     case "${level}" in
-        EMERG) [[ "${LOG_LEVEL}" -ge 0 ]] && echo -e "${CLR_B_RED}[${timestamp}] [EMERG] ${msg}${CLR_RESET}" >&2 ;;
-        ALERT) [[ "${LOG_LEVEL}" -ge 1 ]] && echo -e "${CLR_B_RED}[${timestamp}] [ALERT] ${msg}${CLR_RESET}" >&2 ;;
-        CRIT)  [[ "${LOG_LEVEL}" -ge 2 ]] && echo -e "${CLR_B_RED}[${timestamp}] [CRIT]  ${msg}${CLR_RESET}" >&2 ;;
-        ERROR) [[ "${LOG_LEVEL}" -ge 3 ]] && echo -e "${CLR_RED}[${timestamp}] [ERROR] ${msg}${CLR_RESET}" >&2 ;;
-        WARN)  [[ "${LOG_LEVEL}" -ge 4 ]] && echo -e "${CLR_YELLOW}[${timestamp}] [WARN]  ${msg}${CLR_RESET}" >&2 ;;
-        NOTICE)[[ "${LOG_LEVEL}" -ge 5 ]] && echo -e "${CLR_CYAN}[${timestamp}] [NOTICE] ${msg}${CLR_RESET}" >&2 ;;
-        INFO)  [[ "${LOG_LEVEL}" -ge 6 ]] && echo -e "${CLR_GREEN}[${timestamp}] [INFO]  ${msg}${CLR_RESET}" >&2 ;;
-        DEBUG) [[ "${LOG_LEVEL}" -ge 7 ]] && echo -e "${CLR_BLUE}[${timestamp}] [DEBUG] ${msg}${CLR_RESET}" >&2 ;;
-        *)     echo -e "[${timestamp}] [${level}] ${msg}" >&2 ;;
+        EMERG) [[ "${LOG_LEVEL}" -ge 0 ]] && log_msg="${CLR_B_RED}[${timestamp}] [EMERG] ${msg}${CLR_RESET}" ;;
+        ALERT) [[ "${LOG_LEVEL}" -ge 1 ]] && log_msg="${CLR_B_RED}[${timestamp}] [ALERT] ${msg}${CLR_RESET}" ;;
+        CRIT)  [[ "${LOG_LEVEL}" -ge 2 ]] && log_msg="${CLR_B_RED}[${timestamp}] [CRIT]  ${msg}${CLR_RESET}" ;;
+        ERROR) [[ "${LOG_LEVEL}" -ge 3 ]] && log_msg="${CLR_RED}[${timestamp}] [ERROR] ${msg}${CLR_RESET}" ;;
+        WARN)  [[ "${LOG_LEVEL}" -ge 4 ]] && log_msg="${CLR_YELLOW}[${timestamp}] [WARN]  ${msg}${CLR_RESET}" ;;
+        NOTICE)[[ "${LOG_LEVEL}" -ge 5 ]] && log_msg="${CLR_CYAN}[${timestamp}] [NOTICE] ${msg}${CLR_RESET}" ;;
+        INFO)  [[ "${LOG_LEVEL}" -ge 6 ]] && log_msg="${CLR_GREEN}[${timestamp}] [INFO]  ${msg}${CLR_RESET}" ;;
+        DEBUG) [[ "${LOG_LEVEL}" -ge 7 ]] && log_msg="${CLR_BLUE}[${timestamp}] [DEBUG] ${msg}${CLR_RESET}" ;;
+        *)     log_msg="[${timestamp}] [${level}] ${msg}" ;;
     esac
+
+    if [[ -n "${log_msg:-}" ]]; then
+        echo -e "${log_msg}" >&2
+        if [[ -n "${LOG_FILE}" ]]; then
+            # Strip ANSI color codes for file logging
+            echo -e "${log_msg}" | sed 's/\x1b\[[0-9;]*m//g' >> "${LOG_FILE}"
+        fi
+    fi
 }
 
 # 7. Utility Functions
@@ -136,6 +146,10 @@ check_dependencies() {
 
 is_app_installed() {
     command -v "${1}" >/dev/null 2>&1
+}
+
+is_cmd() {
+    is_app_installed "$1"
 }
 
 confirm() {
@@ -202,6 +216,14 @@ is_online() {
         fi
     done
     return 1
+}
+
+is_mac() {
+    [[ "${__os:-}" == "macOS" ]]
+}
+
+is_linux() {
+    [[ "${__os:-}" == "Linux" ]]
 }
 
 is_container() {
@@ -343,6 +365,10 @@ hr() {
     echo "${line// /$char}"
 }
 
+quiet() {
+    "$@" >/dev/null 2>&1
+}
+
 # --- Advanced Utilities ---
 
 # run: Execute a command, but only log it if DRY_RUN is enabled
@@ -354,7 +380,35 @@ run() {
     fi
 }
 
-spinner() {
+load_env() {
+    local env_file="${1:-.env}"
+    [[ -f "${env_file}" ]] || return 1
+    while IFS='=' read -r key value || [[ -n "${key}" ]]; do
+        [[ "${key}" =~ ^#.*$ ]] && continue
+        [[ -z "${key}" ]] && continue
+        # Remove whitespace and quotes
+        key=$(echo "${key}" | tr -d '[:space:]')
+        value=$(echo "${value}" | tr -d '[:space:]' | sed "s/^'//;s/'$//;s/^\"//;s/\"$//")
+        export "${key}=${value}"
+    done < "${env_file}"
+}
+
+wait_for_url() {
+    local url="${1}"
+    local timeout="${2:-30}"
+    local count=0
+    until quiet curl -s --head --request GET "${url}"; do
+        sleep 1
+        ((count++))
+        if [[ "${count}" -ge "${timeout}" ]]; then
+            return 1
+        fi
+    done
+    return 0
+}
+
+mktemp_file() {
+
     local pid=$1
     local delay=0.1
     local spinstr='|/-\'
