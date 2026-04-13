@@ -27,31 +27,65 @@ readonly __bin="$(basename "$0")"
 LOG_LEVEL="${LOG_LEVEL:-6}"
 NO_COLOR="${NO_COLOR:-}"
 
-# 4. Cleanup & Traps
+# 4. Helper Detection
+is_sourced() {
+    [[ "${BASH_SOURCE[0]}" != "${0}" ]]
+}
+
+is_tty() {
+    [[ -t 1 ]]
+}
+
+is_root() {
+    [[ "$(id -u)" -eq 0 ]]
+}
+
+# 5. Cleanup & Traps
 # cleanup() is called on script exit or interruption
 cleanup() {
+    local -r exit_code=$?
     trap - SIGINT SIGTERM EXIT
+    
+    if [[ "${exit_code}" -ne 0 && "${exit_code}" -ne 130 ]]; then
+        log ERROR "Script failed with exit code ${exit_code}"
+    fi
+    
     # Add your cleanup logic here (e.g., removing temporary files)
-    # [[ -d "${tmp_dir:-}" ]] && rm -rf "${tmp_dir}"
 }
 trap cleanup SIGINT SIGTERM EXIT
 
-# 5. Logging System
-# Usage: log <LEVEL> <MESSAGE>
-# LEVELS: DEBUG, INFO, WARN, ERROR
+# 6. Logging & Colors
 setup_colors() {
     if [[ -t 2 ]] && [[ -z "${NO_COLOR}" ]] && [[ "${TERM:-}" != "dumb" ]]; then
+        # Standard Colors
+        readonly CLR_BLACK='\033[0;30m'
         readonly CLR_RED='\033[0;31m'
         readonly CLR_GREEN='\033[0;32m'
         readonly CLR_YELLOW='\033[0;33m'
         readonly CLR_BLUE='\033[0;34m'
+        readonly CLR_MAGENTA='\033[0;35m'
+        readonly CLR_CYAN='\033[0;36m'
+        readonly CLR_WHITE='\033[0;37m'
+        
+        # Bold Colors
+        readonly CLR_B_BLACK='\033[1;30m'
+        readonly CLR_B_RED='\033[1;31m'
+        readonly CLR_B_GREEN='\033[1;32m'
+        readonly CLR_B_YELLOW='\033[1;33m'
+        readonly CLR_B_BLUE='\033[1;34m'
+        readonly CLR_B_MAGENTA='\033[1;35m'
+        readonly CLR_B_CYAN='\033[1;36m'
+        readonly CLR_B_WHITE='\033[1;37m'
+        
+        # Formatting
+        readonly CLR_BOLD='\033[1m'
+        readonly CLR_DIM='\033[2m'
+        readonly CLR_UNDERLINE='\033[4m'
         readonly CLR_RESET='\033[0m'
     else
-        readonly CLR_RED=''
-        readonly CLR_GREEN=''
-        readonly CLR_YELLOW=''
-        readonly CLR_BLUE=''
-        readonly CLR_RESET=''
+        readonly CLR_BLACK='' CLR_RED='' CLR_GREEN='' CLR_YELLOW='' CLR_BLUE='' CLR_MAGENTA='' CLR_CYAN='' CLR_WHITE=''
+        readonly CLR_B_BLACK='' CLR_B_RED='' CLR_B_GREEN='' CLR_B_YELLOW='' CLR_B_BLUE='' CLR_B_MAGENTA='' CLR_B_CYAN='' CLR_B_WHITE=''
+        readonly CLR_BOLD='' CLR_DIM='' CLR_UNDERLINE='' CLR_RESET=''
     fi
 }
 setup_colors
@@ -64,15 +98,19 @@ log() {
     timestamp=$(date +'%Y-%m-%dT%H:%M:%S%z')
 
     case "${level}" in
-        DEBUG) [[ "${LOG_LEVEL}" -ge 7 ]] && echo -e "${CLR_BLUE}[${timestamp}] [DEBUG] ${msg}${CLR_RESET}" >&2 ;;
-        INFO)  [[ "${LOG_LEVEL}" -ge 6 ]] && echo -e "${CLR_GREEN}[${timestamp}] [INFO]  ${msg}${CLR_RESET}" >&2 ;;
-        WARN)  [[ "${LOG_LEVEL}" -ge 4 ]] && echo -e "${CLR_YELLOW}[${timestamp}] [WARN]  ${msg}${CLR_RESET}" >&2 ;;
+        EMERG) [[ "${LOG_LEVEL}" -ge 0 ]] && echo -e "${CLR_B_RED}[${timestamp}] [EMERG] ${msg}${CLR_RESET}" >&2 ;;
+        ALERT) [[ "${LOG_LEVEL}" -ge 1 ]] && echo -e "${CLR_B_RED}[${timestamp}] [ALERT] ${msg}${CLR_RESET}" >&2 ;;
+        CRIT)  [[ "${LOG_LEVEL}" -ge 2 ]] && echo -e "${CLR_B_RED}[${timestamp}] [CRIT]  ${msg}${CLR_RESET}" >&2 ;;
         ERROR) [[ "${LOG_LEVEL}" -ge 3 ]] && echo -e "${CLR_RED}[${timestamp}] [ERROR] ${msg}${CLR_RESET}" >&2 ;;
+        WARN)  [[ "${LOG_LEVEL}" -ge 4 ]] && echo -e "${CLR_YELLOW}[${timestamp}] [WARN]  ${msg}${CLR_RESET}" >&2 ;;
+        NOTICE)[[ "${LOG_LEVEL}" -ge 5 ]] && echo -e "${CLR_CYAN}[${timestamp}] [NOTICE] ${msg}${CLR_RESET}" >&2 ;;
+        INFO)  [[ "${LOG_LEVEL}" -ge 6 ]] && echo -e "${CLR_GREEN}[${timestamp}] [INFO]  ${msg}${CLR_RESET}" >&2 ;;
+        DEBUG) [[ "${LOG_LEVEL}" -ge 7 ]] && echo -e "${CLR_BLUE}[${timestamp}] [DEBUG] ${msg}${CLR_RESET}" >&2 ;;
         *)     echo -e "[${timestamp}] [${level}] ${msg}" >&2 ;;
     esac
 }
 
-# 6. Utility Functions
+# 7. Utility Functions
 die() {
     local msg="$1"
     local code="${2:-1}"
