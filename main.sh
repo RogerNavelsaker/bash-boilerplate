@@ -58,6 +58,13 @@ parse_params() {
 }
 
 # 9. Main Logic
+function print_telemetry() {
+    local ms=$1 tokens=$2 turns=$3 success=$4
+    local status="${ta_bold}${fg_red}FAILED${ta_none}"
+    [[ "${success}" == "1" ]] && status="${ta_bold}${fg_green}SUCCESS${ta_none}"
+    info "  [TELEMETRY] Status: ${status} | Time: $((ms/1000))s | Tokens: ${tokens} | Turns: ${turns}"
+}
+
 main() {
     check_bash_version 4
     parse_params "$@"
