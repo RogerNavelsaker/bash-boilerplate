@@ -129,6 +129,10 @@ check_dependencies() {
     done
 }
 
+is_app_installed() {
+    command -v "${1}" >/dev/null 2>&1
+}
+
 confirm() {
     local msg="${1:-Are you sure?}"
     read -p "${msg} [y/N] " -n 1 -r
@@ -167,7 +171,59 @@ is_empty() {
     fi
 }
 
-# --- New Advanced Utilities ---
+# --- Validation & System ---
+
+is_int() {
+    [[ "${1}" =~ ^-?[0-9]+$ ]]
+}
+
+os_detect() {
+    readonly __os_type="$(uname -s)"
+    case "${__os_type}" in
+        Linux*)  readonly __os="Linux" ;;
+        Darwin*) readonly __os="macOS" ;;
+        *)       readonly __os="Unknown" ;;
+    esac
+}
+
+get_arch() {
+    readonly __arch="$(uname -m)"
+}
+
+# --- String Manipulation (Pure Bash 4+) ---
+
+to_lower() {
+    echo "${1,,}"
+}
+
+to_upper() {
+    echo "${1^^}"
+}
+
+trim() {
+    local var="$*"
+    # remove leading whitespace characters
+    var="${var#"${var%%[![:space:]]*}"}"
+    # remove trailing whitespace characters
+    var="${var%"${var##*[![:space:]]}"}"
+    echo -n "${var}"
+}
+
+# join_by: Join array elements with a delimiter
+# Usage: join_by "," "${my_array[@]}"
+join_by() {
+    local d=${1-} f=${2-}
+    if shift 2; then
+        printf %s "$f" "${@/#/$d}"
+    fi
+}
+
+# slugify: Convert text to a URL-friendly slug (POSIX tools only)
+slugify() {
+    echo "${1}" | tr '[:upper:]' '[:lower:]' | tr -sc '[:alnum:]' '-' | tr -s '-' | sed 's/^-//;s/-$//'
+}
+
+# --- Advanced Utilities ---
 
 # lock: Prevent multiple instances (simple file-based mutex)
 # Usage: lock /tmp/my-script.lock
@@ -189,34 +245,10 @@ unlock() {
     [[ -n "${__lockfile:-}" ]] && rm -f "${__lockfile}"
 }
 
-# os_detect: Set __os and __os_version
-os_detect() {
-    readonly __os_type="$(uname -s)"
-    case "${__os_type}" in
-        Linux*)  readonly __os="Linux" ;;
-        Darwin*) readonly __os="macOS" ;;
-        *)       readonly __os="Unknown" ;;
-    esac
-}
-
 # pause: Wait for user to press enter
 pause() {
     local msg="${1:-Press [Enter] to continue...}"
     read -p "${msg}"
-}
-
-# join_by: Join array elements with a delimiter
-# Usage: join_by "," "${my_array[@]}"
-join_by() {
-    local d=${1-} f=${2-}
-    if shift 2; then
-        printf %s "$f" "${@/#/$d}"
-    fi
-}
-
-# slugify: Convert text to a URL-friendly slug
-slugify() {
-    echo "$1" | iconv -t ascii//TRANSLIT | sed -E 's/[^a-zA-Z0-9]+/-/g' | sed -E 's/^-+|-+$//g' | tr '[:upper:]' '[:lower:]'
 }
 
 # 8. Argument Parsing
