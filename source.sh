@@ -1,13 +1,9 @@
 #!/usr/bin/env bash
 
-# Bash Script Template (template.sh)
+# Bash Boilerplate Source Library (source.sh)
 #
-# This template uses core.sh for its foundational logic.
-# For local development: ensure core.sh is in the same directory.
-# For production: use build.sh to generate a standalone main.sh.
-
-# This file contains the foundational engine for all scripts.
-# It can be used as a standalone library (sourced) or as part of a build.
+# Designed for sourcing into scripts; contains core functions
+# unlikely to need frequent modification.
 
 # 1. Safety Flags
 set -euo pipefail
@@ -151,63 +147,3 @@ load_env() {
 }
 wait_for_url() { local u="${1}" t="${2:-30}" c=0; until quiet curl -s --head --request GET "${u}"; do sleep 1; ((c++)); [[ "${c}" -ge "${t}" ]] && return 1; done; return 0; }
 quiet() { "$@" >/dev/null 2>&1; }
-# Detect script directory and source core
-
-# 8. Argument Parsing
-usage() {
-    cat <<EOF
-Usage: ${__bin} [OPTIONS] [ARGUMENTS]
-
-A robust script based on the bash-boilerplate template.
-
-Options:
-    -h, --help      Display this help message
-    -v, --verbose   Enable debug logging (LOG_LEVEL=7)
-    -d, --dry-run   Simulation mode (don't execute commands)
-    -f, --flag      An example flag
-    -o, --option    An example option with a value
-
-Example:
-    ${__bin} --verbose --option "Hello World"
-EOF
-}
-
-parse_params() {
-    flag=0
-    option_val=""
-
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            -h|--help)    usage; exit 0 ;;
-            -v|--verbose) LOG_LEVEL=7; shift ;;
-            -d|--dry-run) DRY_RUN=1; shift ;;
-            -f|--flag)    flag=1; shift ;;
-            -o|--option)  [[ -z "${2:-}" || "${2:-}" == -* ]] && die "Option $1 requires a value"; option_val="$2"; shift 2 ;;
-            --)           shift; break ;;
-            -?*)          die "Unknown option: $1" ;;
-            *)            break ;;
-        esac
-    done
-    args=("$@")
-}
-
-# 9. Main Logic
-main() {
-    check_bash_version 4
-    parse_params "$@"
-
-    log INFO "Script started: ${__base}"
-    
-    # Add your logic here
-    # Example:
-    # hr "="
-    # log INFO "OS: ${__os:-Unknown}"
-    
-    log INFO "Completed successfully!"
-    return 0
-}
-
-# 10. Sourcing Protection
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    main "$@"
-fi
