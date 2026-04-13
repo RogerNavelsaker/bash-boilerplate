@@ -27,6 +27,7 @@ readonly __bin="$(basename "$0")"
 LOG_LEVEL="${LOG_LEVEL:-6}"
 NO_COLOR="${NO_COLOR:-}"
 DRY_RUN="${DRY_RUN:-0}"
+__temp_files=()
 
 # 4. Helper Detection
 is_sourced() {
@@ -51,10 +52,13 @@ cleanup() {
         log ERROR "Script failed with exit code ${exit_code}"
     fi
 
+    # Remove tracked temporary files/dirs
+    for tmp in "${__temp_files[@]:-}"; do
+        [[ -e "${tmp}" ]] && rm -rf "${tmp}"
+    done
+
     # Remove lockfile if it exists
     [[ -n "${__lockfile:-}" ]] && rm -f "${__lockfile}"
-    
-    # Add your cleanup logic here (e.g., removing temporary files)
 }
 trap cleanup SIGINT SIGTERM EXIT
 
@@ -178,6 +182,14 @@ is_int() {
     [[ "${1}" =~ ^-?[0-9]+$ ]]
 }
 
+is_alphanumeric() {
+    [[ "${1}" =~ ^[a-zA-Z0-9]+$ ]]
+}
+
+version_gt() {
+    test "$(printf '%s\n' "$@" | sort -V | head -n 1)" != "$1"
+}
+
 is_yes() {
     case "${1,,}" in
         y|yes|true|1) return 0 ;;
@@ -258,6 +270,38 @@ run() {
         log INFO "[DRY-RUN] $*"
     else
         "$@"
+    fi
+}
+
+mktemp_file() {
+    local file
+    file=$(mktemp)
+    __temp_files+=("${file}")
+    echo "${file}"
+}
+
+mktemp_dir() {
+    local dir
+    dir=$(mktemp -d)
+    __temp_files+=("${dir}")
+    echo "${dir}"
+}
+
+contains_element() {
+    local e match="$1"
+    shift
+    for e; do [[ "$e" == "$match" ]] && return 0; done
+    return 1
+}
+
+get_json_val() {
+    local json="$1"
+    local key="$2"
+    if is_app_installed jq; then
+        echo "${json}" | jq -r "${key}"
+    else
+        log WARN "jq not installed, cannot parse JSON"
+        return 1
     fi
 }
 
