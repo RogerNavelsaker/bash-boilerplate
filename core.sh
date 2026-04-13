@@ -26,10 +26,16 @@ is_sourced() { [[ "${BASH_SOURCE[0]}" != "${0}" ]]; }
 is_tty() { [[ -t 1 ]]; }
 is_root() { [[ "$(id -u)" -eq 0 ]]; }
 
-sudo_reexec() {
+sudo_escalate() {
     if ! is_root; then
         log INFO "Re-executing with sudo..."
         exec sudo "$0" "$@"
+    fi
+}
+
+check_root() {
+    if ! is_root; then
+        die "This script must be run as root."
     fi
 }
 
