@@ -186,6 +186,20 @@ is_alphanumeric() {
     [[ "${1}" =~ ^[a-zA-Z0-9]+$ ]]
 }
 
+is_ssh() {
+    [[ -n "${SSH_CLIENT:-}" || -n "${SSH_TTY:-}" ]]
+}
+
+is_online() {
+    local hosts=("8.8.8.8" "1.1.1.1" "google.com")
+    for host in "${hosts[@]}"; do
+        if ping -c 1 -W 1 "$host" >/dev/null 2>&1; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 version_gt() {
     test "$(printf '%s\n' "$@" | sort -V | head -n 1)" != "$1"
 }
@@ -215,6 +229,16 @@ os_detect() {
 
 get_arch() {
     readonly __arch="$(uname -m)"
+}
+
+timer_start() {
+    __timer_start=$(date +%s)
+}
+
+timer_stop() {
+    local end=$(date +%s)
+    local diff=$(( end - __timer_start ))
+    echo "$((diff / 60))m $((diff % 60))s"
 }
 
 timestamp() {
@@ -254,6 +278,13 @@ slugify() {
     echo "${1}" | tr '[:upper:]' '[:lower:]' | tr -sc '[:alnum:]' '-' | tr -s '-' | sed 's/^-//;s/-$//'
 }
 
+indent() {
+    local indent_size="${1:-4}"
+    local spaces
+    printf -v spaces "%${indent_size}s" ""
+    sed "s/^/${spaces}/"
+}
+
 hr() {
     local char="${1:--}"
     local width="${2:-80}"
@@ -271,6 +302,39 @@ run() {
     else
         "$@"
     fi
+}
+
+spinner() {
+    local pid=$1
+    local delay=0.1
+    local spinstr='|/-\'
+    
+    # Degrade: if not a TTY, just wait for the process
+    if [[ ! -t 1 ]]; then
+        wait "$pid"
+        return $?
+    fi
+
+    tput civis # hide cursor
+    while kill -0 "$pid" 2>/dev/null; do
+        local temp=${spinstr#?}
+        printf " [%c]  " "$spinstr"
+        spinstr=$temp${spinstr%"$temp"}
+        sleep $delay
+        printf "\b\b\b\b\b\b"
+    done
+    printf "    \b\b\b\b"
+    tput cnorm # show cursor
+    wait "$pid"
+    return $?
+}
+
+backup() {
+    local file="$1"
+    [[ -f "$file" ]] || return 1
+    local bkp="${file}.$(timestamp).bak"
+    cp -p "$file" "$bkp"
+    echo "$bkp"
 }
 
 mktemp_file() {
