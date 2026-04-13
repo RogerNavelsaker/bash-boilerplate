@@ -7,11 +7,11 @@
 # For production: use build.sh to generate a standalone main.sh.
 
 # Detect script directory and source core
-readonly __script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ -f "${__script_dir}/source.sh" ]]; then
-    source "${__script_dir}/source.sh"
+readonly __main_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "${__main_dir}/core.sh" ]]; then
+    source "${__main_dir}/core.sh"
 else
-    echo "Error: source.sh not found at ${__script_dir}/source.sh" >&2
+    echo "Error: core.sh not found at ${__main_dir}/core.sh" >&2
     exit 1
 fi
 

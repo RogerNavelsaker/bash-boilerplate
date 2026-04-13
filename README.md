@@ -6,16 +6,16 @@ A production-ready Bash script framework synthesized from best practices.
 
 | File | Description |
 | :--- | :--- |
-| `source.sh` | Core library containing 30+ production-grade utility functions. |
-| `script.sh` | Sample script that sources `source.sh`; where your custom logic goes. |
-| `template.sh` | A fully self-contained script (built from combining `source.sh` & `script.sh`). |
-| `build.sh` | Helper script to generate `template.sh` from the other two. |
+| `core.sh` | Core library containing 30+ production-grade utility functions. |
+| `main.sh` | Main script that sources `core.sh`; where your custom logic goes. |
+| `standalone.sh` | A fully self-contained script (built from combining `core.sh` & `main.sh`). |
+| `build.sh` | Helper script to generate `standalone.sh` from the other two. |
 
 ## Usage
 
-1. **Local Development**: Work in `script.sh`. It automatically sources `source.sh` to provide all utilities.
-2. **Build for Distribution**: Run `./build.sh` to generate `template.sh`.
-3. **Deployment**: Ship `template.sh` as a single, zero-dependency file.
+1. **Local Development**: Work in `main.sh`. It automatically sources `core.sh` to provide all utilities.
+2. **Build for Distribution**: Run `./build.sh` to generate `standalone.sh`.
+3. **Deployment**: Ship `standalone.sh` as a single, zero-dependency file.
 
 ## Key Features
 
