@@ -26,6 +26,7 @@ LOG_LEVEL="${LOG_LEVEL:-6}"
 LOG_FILE="${LOG_FILE:-}"
 NO_COLOR="${NO_COLOR:-}"
 DRY_RUN="${DRY_RUN:-0}"
+CRON="${CRON:-0}"
 __temp_files=()
 
 # 4. Helper Detection
@@ -101,6 +102,27 @@ function check_root() {
 
 # 6. Cleanup & Traps
 
+# DESC: Handler for unexpected errors (backtrace)
+function error_trap() {
+    local -r exit_code=$?
+    local -r line_no=$1
+    local -r fn_name=$2
+    
+    # Disable the trap to prevent recursion
+    trap - ERR
+    
+    log ERROR "Error in ${__file} at line ${line_no} in function ${fn_name} (exit code: ${exit_code})"
+    
+    # If in cron mode and we have output, ensure it's logged
+    if [[ "${CRON}" -eq 1 && -n "${__cron_output:-}" ]]; then
+        log ERROR "Cron output follows:"
+        cat "${__cron_output}" >&2
+    fi
+    
+    exit "${exit_code}"
+}
+trap 'error_trap "${LINENO}" "${FUNCNAME:-.}"' ERR
+
 # DESC: Exit handler to clean up resources and log failures
 function cleanup() {
     local -r exit_code=$?
@@ -113,6 +135,9 @@ function cleanup() {
     # Remove tracked temporary files
     for tmp in "${__temp_files[@]:-}"; do [[ -e "${tmp}" ]] && rm -rf "${tmp}" || true; done
     
+    # Remove cron output file if it exists
+    [[ -n "${__cron_output:-}" ]] && rm -f "${__cron_output}" || true
+
     # Remove lockfile
     [[ -n "${__lockfile:-}" ]] && rm -f "${__lockfile}" || true
     
@@ -154,6 +179,14 @@ function colour_init() {
 }
 colour_init
 
+# DESC: Enable verbose debug mode with enhanced tracing
+function debug_mode() {
+    set -o xtrace
+    # Improved tracing format
+    export PS4='+(${BASH_SOURCE}:${LINENO}): ${FUNCNAME[0]:+${FUNCNAME[0]}(): }'
+    LOG_LEVEL=7
+}
+
 # DESC: Main logging function with Syslog-style levels
 function log() {
     local level="${1:-INFO}"
@@ -178,6 +211,22 @@ function log() {
         echo -e "${log_msg}" >&2
         [[ -n "${LOG_FILE}" ]] && echo -e "${log_msg}" | sed 's/\x1b\[[0-9;]*m//g' >> "${LOG_FILE}" || true
     fi
+}
+
+# DESC: Shorthand logging aliases
+function info() { log INFO "$@"; }
+function warn() { log WARN "$@"; }
+function error() { log ERROR "$@"; }
+function debug() { log DEBUG "$@"; }
+function notice() { log NOTICE "$@"; }
+
+# DESC: Print standardized telemetry metrics
+# ARGS: $1: ms, $2: tokens, $3: turns, $4: success (1/0)
+function print_telemetry() {
+    local ms=$1 tokens=$2 turns=$3 success=$4
+    local status="${ta_bold}${fg_red}FAILED${ta_none}"
+    [[ "${success}" == "1" ]] && status="${ta_bold}${fg_green}SUCCESS${ta_none}"
+    log INFO "  [TELEMETRY] Status: ${status} | Time: $((ms/1000))s | Tokens: ${tokens} | Turns: ${turns}"
 }
 
 # 8. Utility Functions
@@ -278,14 +327,37 @@ function ensure_line() { local line="$1" file="$2"; [[ -f "${file}" ]] || touch 
 function get_json_val() { if is_cmd jq; then echo "${1}" | jq -r "${2}"; else log WARN "jq not installed"; return 1; fi; }
 function wait_for_url() { local u="${1}" t="${2:-30}" c=0; until quiet curl -s --head --request GET "${u}"; do sleep 1; ((c++)); [[ "${c}" -ge "${t}" ]] && return 1; done; return 0; }
 
-# DESC: Mutex and environment helpers
+# DESC: Acquire script lock with scope (user or system)
+# ARGS: $1 (optional): Scope - 'system' (default) or 'user'
 function lock() {
-    local l="${1:-/tmp/${__base}.lock}"; if [[ -e "${l}" ]]; then local p=$(cat "${l}"); kill -0 "${p}" 2>/dev/null && die "Already running (PID: ${p})"; fi
-    echo "$$" > "${l}"; readonly __lockfile="${l}"
+    local scope="${1:-system}"
+    local l
+    if [[ "${scope}" == "user" ]]; then
+        l="/tmp/${__base}.${UID}.lock"
+    else
+        l="/tmp/${__base}.lock"
+    fi
+    
+    if [[ -e "${l}" ]]; then
+        local p=$(cat "${l}")
+        kill -0 "${p}" 2>/dev/null && die "Already running (PID: ${p})"
+    fi
+    echo "$$" > "${l}"
+    readonly __lockfile="${l}"
 }
 function unlock() { [[ -n "${__lockfile:-}" ]] && rm -f "${__lockfile}"; }
 function pause() { read -p "${1:-Press [Enter] to continue...}"; }
 function load_env() {
     local f="${1:-.env}"; [[ -f "${f}" ]] || return 1
     while IFS='=' read -r k v || [[ -n "${k}" ]]; do [[ "${k}" =~ ^#.*$ || -z "${k}" ]] && continue; k=$(echo "${k}" | tr -d '[:space:]'); v=$(echo "${v}" | tr -d '[:space:]' | sed "s/^'//;s/'$//;s/^\"//;s/\"$//"); export "${k}=${v}"; done < "${f}"
+}
+
+# DESC: Initialize Cron mode (redirects output to temp file)
+function cron_init() {
+    if [[ "${CRON}" -eq 1 ]]; then
+        __cron_output=$(mktemp_file)
+        readonly __cron_output
+        # Redirect stdout and stderr to the temp file
+        exec 3>&1 4>&2 1> "${__cron_output}" 2>&1
+    fi
 }
