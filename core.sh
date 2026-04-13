@@ -437,3 +437,16 @@ debug() { [[ "${LOG_LEVEL:-1}" -ge 2 ]] && log "${BLUE}[DEBUG]${NC} $1"; }
 notice() { [[ "${LOG_LEVEL:-1}" -ge 1 ]] && log "${BLUE}[NOTICE]${NC} $1"; }
 warning() { [[ "${LOG_LEVEL:-1}" -ge 1 ]] && log "${YELLOW}[WARN]${NC} $1"; }
 error() { log "${RED}[ERROR]${NC} $1"; exit 1; }
+
+# DESC: Generic output function for file redirection
+# ARGS: $1 (required): target (file path or file descriptor)
+#       $@ (required): message
+# OUTS: Message to target
+function out() {
+    local target="$1"; shift
+    if [[ "${target}" =~ ^[0-9]+$ ]]; then
+        echo -e "$*" >&"${target}"
+    else
+        echo -e "$*" >> "${target}"
+    fi
+}
