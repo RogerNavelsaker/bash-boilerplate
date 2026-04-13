@@ -1,75 +1,14 @@
 #!/usr/bin/env bash
+# Main template example
+source "$(dirname "$0")/core.sh"
+source "$(dirname "$0")/lib/log.sh"
 
-# Bash Script Template (template.sh)
-#
-# This template uses core.sh for its foundational logic.
-# For local development: ensure core.sh is in the same directory.
-# For production: use build.sh to generate a standalone main.sh.
-
-# Detect script directory and source core
-readonly __main_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ -f "${__main_dir}/core.sh" ]]; then
-    source "${__main_dir}/core.sh"
-else
-    echo "Error: core.sh not found at ${__main_dir}/core.sh" >&2
-    exit 1
-fi
-
-# 8. Argument Parsing
-usage() {
-    cat <<EOF
-Usage: ${__bin} [OPTIONS] [ARGUMENTS]
-
-A robust script based on the bash-boilerplate template.
-
-Options:
-    -h, --help      Display this help message
-    -v, --verbose   Enable debug logging (LOG_LEVEL=7)
-    -d, --dry-run   Simulation mode (don't execute commands)
-    -f, --flag      An example flag
-    -o, --option    An example option with a value
-
-Example:
-    ${__bin} --verbose --option "Hello World"
-EOF
-}
-
-parse_params() {
-    flag=0
-    option_val=""
-
-    while [[ $# -gt 0 ]]; do
-        case "$1" in
-            -h|--help)    usage; exit 0 ;;
-            -v|--verbose) LOG_LEVEL=7; shift ;;
-            -d|--dry-run) DRY_RUN=1; shift ;;
-            -f|--flag)    flag=1; shift ;;
-            -o|--option)  [[ -z "${2:-}" || "${2:-}" == -* ]] && die "Option $1 requires a value"; option_val="$2"; shift 2 ;;
-            --)           shift; break ;;
-            -?*)          die "Unknown option: $1" ;;
-            *)            break ;;
-        esac
-    done
-    args=("$@")
-}
-
-# 9. Main Logic
 main() {
-    check_bash_version 4
-    parse_params "$@"
-
-    log INFO "Script started: ${__base}"
-    
-    # Add your logic here
-    # Example:
-    # hr "="
-    # log INFO "OS: ${__os:-Unknown}"
-    
-    log INFO "Completed successfully!"
-    return 0
+    info "Starting main process..."
+    # Logic goes here
+    notice "Finished successfully."
 }
 
-# 10. Sourcing Protection
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     main "$@"
 fi
