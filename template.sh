@@ -26,6 +26,7 @@ readonly __bin="$(basename "$0")"
 # LOG_LEVEL: 0 (EMERG) to 7 (DEBUG). Default: 6 (INFO)
 LOG_LEVEL="${LOG_LEVEL:-6}"
 NO_COLOR="${NO_COLOR:-}"
+DRY_RUN="${DRY_RUN:-0}"
 
 # 4. Helper Detection
 is_sourced() {
@@ -177,6 +178,20 @@ is_int() {
     [[ "${1}" =~ ^-?[0-9]+$ ]]
 }
 
+is_yes() {
+    case "${1,,}" in
+        y|yes|true|1) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+is_no() {
+    case "${1,,}" in
+        n|no|false|0) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 os_detect() {
     readonly __os_type="$(uname -s)"
     case "${__os_type}" in
@@ -188,6 +203,10 @@ os_detect() {
 
 get_arch() {
     readonly __arch="$(uname -m)"
+}
+
+timestamp() {
+    date +'%Y%m%d_%H%M%S'
 }
 
 # --- String Manipulation (Pure Bash 4+) ---
@@ -223,7 +242,24 @@ slugify() {
     echo "${1}" | tr '[:upper:]' '[:lower:]' | tr -sc '[:alnum:]' '-' | tr -s '-' | sed 's/^-//;s/-$//'
 }
 
+hr() {
+    local char="${1:--}"
+    local width="${2:-80}"
+    local line
+    printf -v line "%${width}s" ""
+    echo "${line// /$char}"
+}
+
 # --- Advanced Utilities ---
+
+# run: Execute a command, but only log it if DRY_RUN is enabled
+run() {
+    if [[ "${DRY_RUN}" -eq 1 ]]; then
+        log INFO "[DRY-RUN] $*"
+    else
+        "$@"
+    fi
+}
 
 # lock: Prevent multiple instances (simple file-based mutex)
 # Usage: lock /tmp/my-script.lock
@@ -262,6 +298,7 @@ A robust bash script boilerplate.
 Options:
     -h, --help      Display this help message
     -v, --verbose   Enable debug logging (LOG_LEVEL=7)
+    -d, --dry-run   Simulation mode (don't execute commands)
     -f, --flag      An example flag
     -o, --option    An example option with a value
 
@@ -283,6 +320,10 @@ parse_params() {
                 ;;
             -v|--verbose)
                 LOG_LEVEL=7
+                shift
+                ;;
+            -d|--dry-run)
+                DRY_RUN=1
                 shift
                 ;;
             -f|--flag)
