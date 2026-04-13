@@ -186,6 +186,10 @@ is_alphanumeric() {
     [[ "${1}" =~ ^[a-zA-Z0-9]+$ ]]
 }
 
+is_function() {
+    [[ -n "${1:-}" ]] && [[ "$(type -t "${1}")" == "function" ]]
+}
+
 is_ssh() {
     [[ -n "${SSH_CLIENT:-}" || -n "${SSH_TTY:-}" ]]
 }
@@ -198,6 +202,18 @@ is_online() {
         fi
     done
     return 1
+}
+
+is_container() {
+    [[ -f /.dockerenv ]] || grep -qE "docker|lxc|containerd" /proc/1/cgroup 2>/dev/null
+}
+
+is_git_repo() {
+    if is_app_installed git; then
+        git rev-parse --is-inside-work-tree >/dev/null 2>&1
+    else
+        return 1
+    fi
 }
 
 version_gt() {
@@ -231,6 +247,13 @@ get_arch() {
     readonly __arch="$(uname -m)"
 }
 
+check_bash_version() {
+    local -r min_version="${1:-4}"
+    if [[ "${BASH_VERSINFO[0]}" -lt "${min_version}" ]]; then
+        die "This script requires Bash ${min_version} or higher. Current version: ${BASH_VERSION}"
+    fi
+}
+
 timer_start() {
     __timer_start=$(date +%s)
 }
@@ -246,6 +269,33 @@ timestamp() {
 }
 
 # --- String Manipulation (Pure Bash 4+) ---
+
+abs_path() {
+    local path="${1}"
+    if [[ -d "${path}" ]]; then
+        (cd "${path}" && pwd)
+    elif [[ -f "${path}" ]]; then
+        (cd "$(dirname "${path}")" && pwd)/$(basename "${path}")
+    else
+        echo "${path}"
+    fi
+}
+
+get_ext() {
+    local filename=$(basename -- "$1")
+    echo "${filename##*.}"
+}
+
+random_string() {
+    local len="${1:-16}"
+    if is_app_installed tr && [[ -r /dev/urandom ]]; then
+        LC_ALL=C tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c "${len}"
+        echo
+    else
+        printf "%s" "$RANDOM$RANDOM$RANDOM" | head -c "${len}"
+        echo
+    fi
+}
 
 to_lower() {
     echo "${1,,}"
@@ -464,6 +514,7 @@ parse_params() {
 
 # 8. Main Logic
 main() {
+    check_bash_version 4
     parse_params "$@"
 
     log INFO "Starting ${__base}..."
