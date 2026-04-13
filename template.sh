@@ -88,6 +88,44 @@ check_dependencies() {
     done
 }
 
+confirm() {
+    local msg="${1:-Are you sure?}"
+    read -p "${msg} [y/N] " -n 1 -r
+    echo
+    if [[ ! "${REPLY}" =~ ^[Yy]$ ]]; then
+        return 1
+    fi
+}
+
+retry() {
+    local -r -i max_attempts="$1"; shift
+    local -r cmd="$@"
+    local -i attempt=1
+
+    until eval "${cmd}"; do
+        if (( attempt == max_attempts )); then
+            log ERROR "Command failed after ${max_attempts} attempts: ${cmd}"
+            return 1
+        fi
+
+        local wait_time=$(( attempt * 2 ))
+        log WARN "Command failed. Retrying in ${wait_time}s... (Attempt ${attempt}/${max_attempts})"
+        sleep "${wait_time}"
+        (( attempt++ ))
+    done
+}
+
+is_empty() {
+    local -r path="${1:-}"
+    if [[ -d "${path}" ]]; then
+        [[ -z "$(ls -A "${path}")" ]]
+    elif [[ -f "${path}" ]]; then
+        [[ ! -s "${path}" ]]
+    else
+        [[ -z "${path}" ]]
+    fi
+}
+
 # 7. Argument Parsing
 usage() {
     cat <<EOF
@@ -158,6 +196,21 @@ main() {
 
     # Example: check for dependencies
     # check_dependencies git curl
+
+    # Example: check if a directory/file/variable is empty
+    # if is_empty "/tmp/test"; then
+    #     log INFO "Target is empty"
+    # fi
+
+    # Example: confirm an action
+    # if confirm "Do you want to proceed?"; then
+    #     log INFO "User confirmed!"
+    # else
+    #     log INFO "User cancelled"
+    # fi
+
+    # Example: retry a command
+    # retry 3 "ls -l /nonexistent" || true
 
     if [[ "${flag}" -eq 1 ]]; then
         log INFO "Flag -f/--flag was set"
