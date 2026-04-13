@@ -49,6 +49,9 @@ cleanup() {
     if [[ "${exit_code}" -ne 0 && "${exit_code}" -ne 130 ]]; then
         log ERROR "Script failed with exit code ${exit_code}"
     fi
+
+    # Remove lockfile if it exists
+    [[ -n "${__lockfile:-}" ]] && rm -f "${__lockfile}"
     
     # Add your cleanup logic here (e.g., removing temporary files)
 }
@@ -164,7 +167,60 @@ is_empty() {
     fi
 }
 
-# 7. Argument Parsing
+# --- New Advanced Utilities ---
+
+# lock: Prevent multiple instances (simple file-based mutex)
+# Usage: lock /tmp/my-script.lock
+lock() {
+    local lockfile="${1:-/tmp/${__base}.lock}"
+    if [[ -e "${lockfile}" ]]; then
+        local pid
+        pid=$(cat "${lockfile}")
+        if kill -0 "${pid}" 2>/dev/null; then
+            die "Script is already running (PID: ${pid})"
+        fi
+    fi
+    echo "$$" > "${lockfile}"
+    readonly __lockfile="${lockfile}"
+}
+
+# unlock: Manual unlock (though cleanup() should handle it)
+unlock() {
+    [[ -n "${__lockfile:-}" ]] && rm -f "${__lockfile}"
+}
+
+# os_detect: Set __os and __os_version
+os_detect() {
+    readonly __os_type="$(uname -s)"
+    case "${__os_type}" in
+        Linux*)  readonly __os="Linux" ;;
+        Darwin*) readonly __os="macOS" ;;
+        *)       readonly __os="Unknown" ;;
+    esac
+}
+
+# pause: Wait for user to press enter
+pause() {
+    local msg="${1:-Press [Enter] to continue...}"
+    read -p "${msg}"
+}
+
+# join_by: Join array elements with a delimiter
+# Usage: join_by "," "${my_array[@]}"
+join_by() {
+    local d=${1-} f=${2-}
+    if shift 2; then
+        printf %s "$f" "${@/#/$d}"
+    fi
+}
+
+# slugify: Convert text to a URL-friendly slug
+slugify() {
+    echo "$1" | iconv -t ascii//TRANSLIT | sed -E 's/[^a-zA-Z0-9]+/-/g' | sed -E 's/^-+|-+$//g' | tr '[:upper:]' '[:lower:]'
+}
+
+# 8. Argument Parsing
+
 usage() {
     cat <<EOF
 Usage: ${__bin} [OPTIONS] [ARGUMENTS]
