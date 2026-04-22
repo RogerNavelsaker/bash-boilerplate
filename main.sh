@@ -6,6 +6,7 @@
 # For local development: ensure core.sh is in the same directory.
 # For production: use build.sh to generate a standalone script.
 
+# BOILERPLATE_MAIN_START
 # Detect script directory and source core
 readonly __main_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -f "${__main_dir}/core.sh" ]]; then
@@ -61,11 +62,12 @@ parse_params() {
 function print_telemetry() {
     local ms=$1 tokens=$2 turns=$3 success=$4
     local status="${ta_bold}${fg_red}FAILED${ta_none}"
-    [[ "${success}" == "1" ]] && status="${ta_bold}${fg_green}SUCCESS${ta_none}"
+    [[ "$success" == "1" ]] && status="${ta_bold}${fg_green}SUCCESS${ta_none}"
     info "  [TELEMETRY] Status: ${status} | Time: $((ms/1000))s | Tokens: ${tokens} | Turns: ${turns}"
 }
 
 main() {
+    safe_mode
     check_bash_version 4
     parse_params "$@"
     cron_init
@@ -73,13 +75,11 @@ main() {
     log INFO "Script started: ${__base}"
     log DEBUG "Invocation: ${__invocation}"
     
-    # Add your logic here
-    # Example:
-    # box "Processing Data"
-    # hr "="
-    
+    # Example validation
+    [[ -z "$option_val" && ${flag} -eq 0 ]] && { usage; exit "$E_USAGE"; }
+
     log INFO "Completed successfully!"
-    return 0
+    return "$E_SUCCESS"
 }
 
 # 10. Sourcing Protection

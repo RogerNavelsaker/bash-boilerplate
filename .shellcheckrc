@@ -1,0 +1,5 @@
+# shellcheck configuration
+shell=bash
+# SC1090: Can't follow non-constant source.
+# SC1091: Not following file.
+disable=SC1090,SC1091

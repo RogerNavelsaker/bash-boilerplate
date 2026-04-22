@@ -22,6 +22,17 @@ DRY_RUN="${DRY_RUN:-0}"
 CRON="${CRON:-0}"
 __temp_files=()
 
+# DESC: Enable strict mode and safe defaults
+# ARGS: None
+# OUTS: None
+# RETS: 0
+function safe_mode() {
+    set -euo pipefail
+    set -o errtrace
+    IFS=$'\n\t'
+    set -f # Disable globbing by default
+}
+
 # DESC: Detect if the script is being sourced
 # ARGS: None
 # OUTS: None
@@ -212,18 +223,38 @@ function error() { log ERROR "$@"; }
 function debug() { log DEBUG "$@"; }
 function notice() { log NOTICE "$@"; }
 
-# DESC: Generic output function
-# ARGS: $1 (required): target (file path or file descriptor)
+# DESC: Output to a named standard stream
+# ARGS: $1 (required): stream (stdout or stderr)
 #       $@ (required): message
-# OUTS: Message to target
+# OUTS: Message to stream
 # RETS: 0
 function out() {
+    local stream="$1"; shift
+    case "${stream}" in
+        stdout) echo -e "$*" >&1 ;;
+        stderr) echo -e "$*" >&2 ;;
+        *) die "Invalid stream: ${stream}. Use 'stdout' or 'stderr'." ;;
+    esac
+}
+
+# DESC: Output to target file, overwriting content
+# ARGS: $1 (required): target file path
+#       $@ (required): message
+# OUTS: Message to file
+# RETS: 0
+function overwrite() {
     local target="$1"; shift
-    if [[ "${target}" =~ ^[0-9]+$ ]]; then
-        echo -e "$*" >&"${target}"
-    else
-        echo -e "$*" > "${target}"
-    fi
+    echo -e "$*" > "${target}"
+}
+
+# DESC: Output to target file, appending content
+# ARGS: $1 (required): target file path
+#       $@ (required): message
+# OUTS: Message to file
+# RETS: 0
+function append() {
+    local target="$1"; shift
+    echo -e "$*" >> "${target}"
 }
 
 # DESC: Exit with an error message
@@ -268,7 +299,21 @@ function retry() {
 # ARGS: $1 (required): path or variable
 # OUTS: None
 # RETS: 0 if empty, 1 otherwise
-function is_empty() { local -r p="${1:-}"; if [[ -d "${p}" ]]; then [[ -z "$(ls -A "${p}")" ]]; elif [[ -f "${p}" ]]; then [[ ! -s "${p}" ]]; else [[ -z "${p}" ]]; fi; }
+function is_empty() {
+    local -r p="${1:-}"
+    if [[ -d "${p}" ]]; then
+        local -a files
+        shopt -s nullglob
+        files=("${p}"/* "${p}"/.*)
+        shopt -u nullglob
+        # Check for count <= 2 (just . and ..)
+        [[ ${#files[@]} -le 2 ]]
+    elif [[ -f "${p}" ]]; then
+        [[ ! -s "${p}" ]]
+    else
+        [[ -z "${p}" ]]
+    fi
+}
 
 # DESC: Validation helpers
 # ARGS: $1 (required): value
@@ -341,7 +386,7 @@ function slugify() { echo "${1}" | tr '[:upper:]' '[:lower:]' | tr -sc '[:alnum:
 # RETS: 0
 function indent() { local i="${1:-4}"; local s; printf -v s "%${i}s" ""; sed "s/^/${s}/"; }
 function hr() { local c="${1:--}" w="${2:-80}" l; printf -v l "%${w}s" ""; echo "${l// /$c}"; }
-function box() { local msg="$*"; local len=${#msg}; hr "-" $((len + 4)); echo "| ${msg} |"; hr "-" $((len + 4)); }
+function box() { local msg="$*"; local len=${#msg}; hr "-" $((len + 4)); echo "| ${msg} |" ; hr "-" $((len + 4)); }
 
 # DESC: Execution wrappers
 # ARGS: $@ (required): command
@@ -416,7 +461,15 @@ function pause() { read -p "${1:-Press [Enter] to continue...}"; }
 # RETS: 0
 function load_env() {
     local f="${1:-.env}"; [[ -f "${f}" ]] || return 1
-    while IFS='=' read -r k v || [[ -n "${k}" ]]; do [[ "${k}" =~ ^#.*$ || -z "${k}" ]] && continue; k=$(echo "${k}" | tr -d '[:space:]'); v=$(echo "${v}" | tr -d '[:space:]' | sed "s/^'//;s/'$//;s/^\"//;s/\"$//"); export "${k}=${v}"; done < "${f}"
+    while IFS='=' read -r k v || [[ -n "${k}" ]]; do
+        [[ "${k}" =~ ^#.*$ || -z "${k}" ]] && continue
+        # Pure Bash trim
+        k="${k#"${k%%[![:space:]]*}"}"; k="${k%"${k##*[![:space:]]}"}"
+        v="${v#"${v%%[![:space:]]*}"}"; v="${v%"${v##*[![:space:]]}"}"
+        # Strip quotes
+        v="${v#[\"\']}"; v="${v%[\"\']}"
+        export "${k}=${v}"
+    done < "${f}"
 }
 
 # DESC: Initialize Cron mode (redirects output to temp file)
@@ -430,16 +483,6 @@ function cron_init() {
         exec 3>&1 4>&2 1> "${__cron_output}" 2>&1
     fi
 }
-
-### Logging Helpers (from lib/log.sh)
-readonly RED='\033[0;31m'; readonly GREEN='\033[0;32m'; readonly YELLOW='\033[0;33m'; readonly BLUE='\033[0;34m'; readonly NC='\033[0m'
-log() { echo -e "[$(date +'%Y-%m-%dT%H:%M:%S%z')] $1" >&2; }
-info() { [[ "${LOG_LEVEL:-1}" -ge 1 ]] && log "${GREEN}[INFO]${NC} $1"; }
-debug() { [[ "${LOG_LEVEL:-1}" -ge 2 ]] && log "${BLUE}[DEBUG]${NC} $1"; }
-notice() { [[ "${LOG_LEVEL:-1}" -ge 1 ]] && log "${BLUE}[NOTICE]${NC} $1"; }
-warning() { [[ "${LOG_LEVEL:-1}" -ge 1 ]] && log "${YELLOW}[WARN]${NC} $1"; }
-error() { log "${RED}[ERROR]${NC} $1"; exit 1; }
-# Detect script directory and source core
 
 # 8. Argument Parsing
 usage() {
@@ -492,6 +535,7 @@ function print_telemetry() {
 }
 
 main() {
+    safe_mode
     check_bash_version 4
     parse_params "$@"
     cron_init
@@ -499,13 +543,11 @@ main() {
     log INFO "Script started: ${__base}"
     log DEBUG "Invocation: ${__invocation}"
     
-    # Add your logic here
-    # Example:
-    # box "Processing Data"
-    # hr "="
-    
+    # Example validation
+    [[ -z "${option_val}" && ${flag} -eq 0 ]] && { usage; exit "${E_USAGE}"; }
+
     log INFO "Completed successfully!"
-    return 0
+    return "${E_SUCCESS}"
 }
 
 # 10. Sourcing Protection

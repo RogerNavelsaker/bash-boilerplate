@@ -9,33 +9,33 @@ readonly core_file="${script_dir}/core.sh"
 readonly main_file="${script_dir}/main.sh"
 readonly output_file="${script_dir}/standalone.sh"
 
-if [[ ! -f "${core_file}" ]] || [[ ! -f "${main_file}" ]]; then
+if [[ ! -f "$core_file" ]] || [[ ! -f "$main_file" ]]; then
     echo "Error: core.sh and main.sh must exist in ${script_dir}" >&2
     exit 1
 fi
 
 echo "Building standalone script..."
 
-# 1. Prepare core content (skip shebang and header)
+# 1. Prepare core content (strip header)
 tmp_core=$(mktemp)
-sed '1,6d' "${core_file}" > "$tmp_core"
+sed -n '/# BOILERPLATE_CORE_START/,$p' "$core_file" | sed '1d' > "$tmp_core"
 
-# 2. Prepare main by removing the local sourcing logic block
+# 2. Prepare main (strip local sourcing)
 tmp_main_content=$(mktemp)
-sed '/readonly __main_dir/,/fi/d' "${main_file}" > "$tmp_main_content"
+sed '/# BOILERPLATE_MAIN_START/,/fi/d' "$main_file" > "$tmp_main_content"
 
 # 3. Inject core content into the main content
 tmp_standalone=$(mktemp)
-# Keep first 8 lines of main.sh (shebang and headers)
+# Keep first 8 lines (shebang and headers)
 head -n 8 "$tmp_main_content" > "$tmp_standalone"
-# Inject the core functions
+# Inject core functions
 cat "$tmp_core" >> "$tmp_standalone"
-# Append the rest of main.sh
+# Append rest of main.sh
 sed '1,8d' "$tmp_main_content" >> "$tmp_standalone"
 
 # 4. Clean up and finalize
-mv "$tmp_standalone" "${output_file}"
-chmod +x "${output_file}"
+mv "$tmp_standalone" "$output_file"
+chmod +x "$output_file"
 rm "$tmp_core" "$tmp_main_content"
 
 echo "Done! Standalone script generated at ${output_file}"
