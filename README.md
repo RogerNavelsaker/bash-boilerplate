@@ -6,10 +6,11 @@ A production-ready Bash script framework synthesized from best practices.
 
 | File | Description |
 | :--- | :--- |
-| `core.sh` | Core library containing 30+ production-grade utility functions. |
+| `core.sh` | Core library containing 68 production-grade utility functions. |
 | `main.sh` | Main script that sources `core.sh`; where your custom logic goes. |
 | `standalone.sh` | A fully self-contained script (built from combining `core.sh` & `main.sh`). |
 | `build.sh` | Helper script to generate `standalone.sh` from the other two. |
+| `bin/` | Convenience wrappers: `build`, `fix`, `lint`, `test`. |
 
 ## Usage
 
@@ -20,7 +21,7 @@ A production-ready Bash script framework synthesized from best practices.
 ## Key Features
 
 - **Safety First**: `safe_mode` (strict mode, IFS, and globbing protection) and Bash version checking.
-- **Robust Error Handling**: Stack traces on failure and standard exit codes (sysexits.h).
+- **Robust Error Handling**: Stack traces on failure and standard exit codes (`E_USAGE`, `E_SUCCESS`).
 - **Magic Variables**: `__dir`, `__file`, `__base`, and `__bin`.
 - **High Performance**: Pure Bash implementations of utilities like `timestamp` and `is_empty` to reduce external dependencies.
 - **Robust Logging**: Syslog levels, colors, and file logging support.
